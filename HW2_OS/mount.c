@@ -3,12 +3,14 @@
 #include <memory.h>
 #include "fs.h"
 #include "disk.h"
+#include <unistd.h>
 
 
 #define DATA_REGION_START_INDEX 19;
 
 FileSysInfo* pFileSysInfo = NULL;
 const char ROOT_DIR_NAME[] = "/";
+extern int fd;
 
 void Mount(MountType type)
 {
@@ -54,9 +56,7 @@ void Mount(MountType type)
         PutInode(0, pInode);
 
     }else if(type == MT_TYPE_READWRITE){
-        //pFileSysInfo = (FileSysInfo * )malloc(BLOCK_SIZE);
-        pFileSysInfo = (FileSysInfo * )malloc(sizeof(pFileSysInfo));
-        DevReadBlock(0,pFileSysInfo);
+        DevOpenDisk();
         if(pFileDescTable==NULL) {//FDT init
             pFileDescTable = (FileDescTable *) malloc(sizeof(FileDescTable));
             memset(pFileDescTable,0,sizeof(FileDescTable));
@@ -69,5 +69,6 @@ void Unmount(void)
     DevWriteBlock(0,pFileSysInfo);
     pFileSysInfo = NULL;
     pFileDescTable = NULL;
+    close(fd);
 }
 

@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <memory.h>
 #include <stdbool.h>
-#include <stdbool.h>
 #include "disk.h"
 #include "fs.h"
 
@@ -10,9 +9,9 @@
 #define SET '1'
 #define RESET '0'
 
-#define NUM_OF_BLOCKS 512
 #define BITS_A_BYTE 8
 #define DATA_REGION_START_INDEX 19
+const int NUM_OF_BLOCKS = FS_DISK_CAPACITY/BLOCK_SIZE;
 
 typedef enum _UPDATE_FLAG{
     ADD_DIR,
@@ -193,6 +192,11 @@ int addNewFileBlock(int index, char* target, Inode* parentInode, int parentInode
 
 int WriteFile(int fileDesc, char* pBuffer, int length)
 {
+
+    if(fileDesc<0||fileDesc>MAX_FD_ENTRY_LEN)
+        return -1;
+    if(pFileDescTable->file[fileDesc].bUsed==false)
+        return -1;
 
     Inode* fInode = (Inode*)malloc(sizeof(Inode));
     int inodeNum = pFileDescTable->file[fileDesc].inodeNum;

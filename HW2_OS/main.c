@@ -4,10 +4,9 @@
 #include "fs.h"
 #include "disk.h"
 
+//TODO : extern fd, mount reload
 int main() {
 
-    char* a =(char *)malloc(BLOCK_SIZE);
-    free(a);
     Mount(MT_TYPE_FORMAT);
 
     printf("%d\n",MakeDir("/tmp1"));
@@ -27,7 +26,6 @@ int main() {
     printf("%d\n",MakeDir("/tmp1/ab10"));
     printf("%d\n",MakeDir("/tmp1/ab1"));
     printf("%d\n",MakeDir("/tmp1/ab10"));
-
 
     DirEntryInfo* pDirEntryInfo = (DirEntryInfo*)malloc(BLOCK_SIZE * 10);
     EnumerateDirStatus("/tmp1",pDirEntryInfo, 10);
@@ -56,7 +54,7 @@ int main() {
     strcpy(pBuf1,"helloOS");
     char* pBuf2 = (char *)malloc(BLOCK_SIZE);
     strcpy(pBuf2,"01234567890123456789012345678901234567890123456789012345678901235");
-    WriteFile(myFD,pBuf1,BLOCK_SIZE);
+    printf("%d\n",WriteFile(0,pBuf1,BLOCK_SIZE));
     WriteFile(myFD,pBuf2,BLOCK_SIZE);
     WriteFile(myFD,pBuf2,BLOCK_SIZE);
     WriteFile(myFD,pBuf2,BLOCK_SIZE);
@@ -88,9 +86,13 @@ int main() {
     CloseFile(myFD);
     RemoveFile("/tmp1/asd");
 
-    printf("1: %d\n",pFileSysInfo->numAllocBlocks);
     Unmount();
     Mount(MT_TYPE_READWRITE);
-    printf("2 : %d\n",pFileSysInfo->numAllocBlocks);
+
+
+    EnumerateDirStatus("/tmp1",pDirEntryInfo, 10);
+    for (i = 0;i < 10;i++)
+        printf("directory entry:%s, type:%d, inode number:%d\n", pDirEntryInfo[i].name, pDirEntryInfo[i].type, pDirEntryInfo[i].inodeNum);
+
     return 0;
 }
