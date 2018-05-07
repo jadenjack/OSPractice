@@ -1,0 +1,1 @@
+/usr/bin/cc -g   CMakeFiles/HW2_OS.dir/main.c.o CMakeFiles/HW2_OS.dir/disk.c.o CMakeFiles/HW2_OS.dir/fs.c.o CMakeFiles/HW2_OS.dir/mount.c.o  -o HW2_OS 
