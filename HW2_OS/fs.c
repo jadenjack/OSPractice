@@ -11,7 +11,9 @@
 
 #define BITS_A_BYTE 8
 #define DATA_REGION_START_INDEX 19
+
 const int NUM_OF_BLOCKS = FS_DISK_CAPACITY/BLOCK_SIZE;
+const int NUM_OF_BLOCKS_IN_INDIRECTBLOCK = BLOCK_SIZE/sizeof(int);
 
 typedef enum _UPDATE_FLAG{
     ADD_DIR,
@@ -28,6 +30,13 @@ const int NUMBER_OF_INODE = BLOCK_SIZE/sizeof(Inode);
 FileDescTable* pFileDescTable = NULL;
 
 void copyInode(int blkno, Inode* pInode, void (*fp)());
+int initNewFile(int newInodeNum);
+int addFileDir(char* target,int parentInodeNum);
+int addNewFileBlock(int index, char* target, Inode* parentInode, int parentInodeNum, int* parentBlockNum, DirEntry* parentDE);
+int getAvailableByte(int flow);
+int getFileBlockNum(Inode* fInode, int offset);
+void addBlockInInode(Inode* fInode,int inodeNum, int writeBlockNum);
+int isOpened(int fileInodeNum);
 
 int OpenFile(const char* szFileName, OpenFlag flag)
 {
@@ -110,17 +119,17 @@ int addFileDir(char* target,int parentInodeNum){
         SetBlockBitmap(newBlockNum);
         indirectBlockNum = newBlockNum;
         bnum = newBlockNum;
-        int indirectBlock[BLOCK_SIZE/sizeof(int)];
+        int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
         memset(indirectBlock,0,BLOCK_SIZE);
         parentInode->indirBlockPtr=indirectBlockNum;
         DevWriteBlock(bnum,indirectBlock);
         PutInode(parentInodeNum,parentInode);
     }
 
-    int indirectBlock[BLOCK_SIZE/sizeof(int)];
+    int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
     DevReadBlock(indirectBlockNum,indirectBlock);
 
-    for(i=0;i<BLOCK_SIZE/sizeof(int);i++){
+    for(i=0;i<NUM_OF_BLOCKS_IN_INDIRECTBLOCK;i++){
         bnum = indirectBlock[i];
         DirEntry de[NUM_OF_DIRENT_PER_BLOCK];
 
@@ -259,7 +268,7 @@ int getFileBlockNum(Inode* fInode, int offset){
 
     int i;
     div-=2;
-    int indirectBlock[BLOCK_SIZE/sizeof(int)];
+    int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
     DevReadBlock(fInode->indirBlockPtr,indirectBlock);
     return indirectBlock[div];
 }
@@ -282,18 +291,18 @@ void addBlockInInode(Inode* fInode,int inodeNum, int writeBlockNum){
         updateFileSysInfo(ALOCATE_BLOCK);
         SetBlockBitmap(newBlockNum);
         indirectBlockNum = newBlockNum;
-        int indirectBlock[BLOCK_SIZE/sizeof(int)];
+        int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
         memset(indirectBlock,0,BLOCK_SIZE);
         fInode->indirBlockPtr=indirectBlockNum;
         DevWriteBlock(indirectBlockNum,indirectBlock);
         PutInode(inodeNum,fInode);
     }
-    int indirectBlock[BLOCK_SIZE/sizeof(int)];
+    int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
     int bnum;
     DevReadBlock(indirectBlockNum,indirectBlock);
 
     //link with indirect
-    for(i=0;i<BLOCK_SIZE/sizeof(int);i++){
+    for(i=0;i<NUM_OF_BLOCKS_IN_INDIRECTBLOCK;i++){
         bnum = indirectBlock[i];
 
         if(bnum==0){//add new block for indirectBlock
@@ -408,9 +417,9 @@ int RemoveFile(const char* szFileName)
     bnum = fInode->indirBlockPtr;
     if(bnum!=0){
         int inbnum;
-        int indirectBlock[BLOCK_SIZE/sizeof(int)];
+        int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
         DevReadBlock(bnum,indirectBlock);
-        for(i=0;i<BLOCK_SIZE/sizeof(int);i++){
+        for(i=0;i<NUM_OF_BLOCKS_IN_INDIRECTBLOCK;i++){
             inbnum = indirectBlock[i];
             if(inbnum==0)
                 break;
@@ -461,10 +470,10 @@ int getFileInodeNum(Inode* pInode,char *target){
         }
     }
     bnum = pInode->indirBlockPtr;
-    int indirectBlock[BLOCK_SIZE/sizeof(int)];
+    int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
     int inbnum;
     DevReadBlock(bnum,indirectBlock);
-    for(i=0;i<BLOCK_SIZE/sizeof(int);i++){
+    for(i=0;i<NUM_OF_BLOCKS_IN_INDIRECTBLOCK;i++){
         inbnum=indirectBlock[i];
         if(inbnum!=0){
             DevReadBlock(inbnum,de);
@@ -507,11 +516,11 @@ void disLinkWithParent(Inode* parentInode,int parentInodeNum, int pInodeNum){
             }
         }
     }
-    int indirectBlock[BLOCK_SIZE/sizeof(int)];
+    int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
     int inbnum;
     bnum = parentInode->indirBlockPtr;
     DevReadBlock(bnum,indirectBlock);
-    for(i=0;i<BLOCK_SIZE/sizeof(int);i++){
+    for(i=0;i<NUM_OF_BLOCKS_IN_INDIRECTBLOCK;i++){
         inbnum = indirectBlock[i];
         DevReadBlock(inbnum,de);
         for(j=0;j<NUM_OF_DIRENT_PER_BLOCK;j++){
@@ -536,7 +545,7 @@ void disLinkWithParent(Inode* parentInode,int parentInodeNum, int pInodeNum){
 int getNumOfIndirectDE(int indirectBlock[]){
     int i;
     int count=0;
-    for(i=0;i<BLOCK_SIZE/sizeof(int);i++){
+    for(i=0;i<NUM_OF_BLOCKS_IN_INDIRECTBLOCK;i++){
         if(indirectBlock[i]!=0){
             count++;
         }
@@ -567,6 +576,8 @@ int getParentInodeDir(char* szDirName,char* target, Inode* pInode, int* curInode
         }else if(szDirName[i] != '/'){
             target[nameIndex++] = szDirName[i];
         }else{// == '/'
+            if(i==(strlen(szDirName)-1))//if last character equal '/'
+                continue;
             *curInodeNum = goDownDir(target,pInode, curInodeNum,parentBlockNum);
             memset(target,0,MAX_NAME_LEN);
             nameIndex=0;
@@ -664,17 +675,17 @@ int addNewDir(char* target, Inode* parentInode,int parentInodeNum){
         SetBlockBitmap(newBlockNum);
         indirectBlockNum = newBlockNum;
         bnum = newBlockNum;
-        int indirectBlock[BLOCK_SIZE/sizeof(int)];
+        int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
         memset(indirectBlock,0,BLOCK_SIZE);
         parentInode->indirBlockPtr=indirectBlockNum;
         DevWriteBlock(bnum,indirectBlock);
         PutInode(parentInodeNum,parentInode);
     }
 
-    int indirectBlock[BLOCK_SIZE/sizeof(int)];
+    int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
     DevReadBlock(indirectBlockNum,indirectBlock);
 
-    for(i=0;i<BLOCK_SIZE/sizeof(int);i++){
+    for(i=0;i<NUM_OF_BLOCKS_IN_INDIRECTBLOCK;i++){
         bnum = indirectBlock[i];
         DirEntry de[NUM_OF_DIRENT_PER_BLOCK];
 
@@ -718,9 +729,9 @@ int isExistInDir(char* target, Inode* parentInode){
             return 1;
     }
     int inbnum = parentInode->indirBlockPtr;
-    int indirectBlock[BLOCK_SIZE/sizeof(int)];
+    int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
     DevReadBlock(inbnum,indirectBlock);
-    for(i=0;i<BLOCK_SIZE/sizeof(int);i++){
+    for(i=0;i<NUM_OF_BLOCKS_IN_INDIRECTBLOCK;i++){
         bnum = indirectBlock[i];
         if(bnum==0)
             continue;
@@ -866,6 +877,8 @@ int RemoveDir(const char* szDirName)
     if(countFile(pInode)>2)//if countFile is bigger than 3, there is any file in directory (include ".", ".."),
         return -1;
     //free inode,
+
+    ResetBlockBitmap(pInode->dirBlockPtr[0]);
     ResetInodeBitmap(*curInodeNum);
     updateFileSysInfo(FREE_INODE);
     updateFileSysInfo(FREE_BLOCK);
@@ -890,13 +903,13 @@ int countFile(Inode* pInode){
         count+=countFileInBlock(de);
     }
     int inbnum = pInode->indirBlockPtr;
-    int indirectBlock[BLOCK_SIZE/sizeof(int)];
+    int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
 
     if(inbnum==0)
         return count;
 
     DevReadBlock(inbnum,indirectBlock);
-    for(i=0;i<BLOCK_SIZE/sizeof(int);i++){
+    for(i=0;i<NUM_OF_BLOCKS_IN_INDIRECTBLOCK;i++){
         bnum = indirectBlock[i];
         DevReadBlock(bnum,de);
         count+=countFileInBlock(de);
@@ -947,9 +960,9 @@ int EnumerateDirStatus(const char* szDirName, DirEntryInfo* pDirEntry, int dirEn
     //indirect
     int inbnum = pInode->indirBlockPtr;
     if(inbnum!=0) {
-        int indirectBlock[BLOCK_SIZE / sizeof(int)];
+        int indirectBlock[NUM_OF_BLOCKS_IN_INDIRECTBLOCK];
         DevReadBlock(inbnum, indirectBlock);
-        for (i = 0; i < BLOCK_SIZE / sizeof(int); i++) {
+        for (i = 0; i < NUM_OF_BLOCKS_IN_INDIRECTBLOCK; i++) {
             bnum = indirectBlock[i];
             if (bnum == 0)
                 continue;
@@ -996,20 +1009,9 @@ void SetBit(char* InodeBlock, int inodeNum, int BitMap, char bit){
 
     }
     else {
-//        for(int i=7; i>=0; i--) {
-//            printf("%d", InodeBlock[charIndex] >> i & 1);
-//        }
-//        printf("\n");Num();
         InodeBlock[charIndex] &= ~(128 >> bitIndex);
-//        for(int i=7; i>=0; i--) {
-//            printf("%d", InodeBlock[charIndex] >> i & 1);
-//        }
-//        printf("\n");
     }
     DevWriteBlock(BitMap, InodeBlock);
-
-    //DevReadBlock(BitMap, InodeBlock);
-    //printf("%u\n",*InodeBlock);
 }
 
 

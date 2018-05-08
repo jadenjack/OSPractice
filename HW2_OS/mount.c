@@ -24,6 +24,7 @@ void Mount(MountType type)
         DirEntry *de = (DirEntry *) dirEntryBlock;//casting
         de[0].inodeNum = freeInodeNum;//first inodeNum of root dir must be 0
         strcpy(de[0].name, ".");//there is only "." file
+
         DevWriteBlock(freeBlockNum, de);
 
         pFileSysInfo = (FileSysInfo * )malloc(sizeof(FileSysInfo));
@@ -52,6 +53,7 @@ void Mount(MountType type)
         //ppt 12p
         Inode* pInode = (Inode*)malloc(sizeof(Inode));
         GetInode(0, pInode);
+        pInode->type=1;
         pInode->dirBlockPtr[0] = DATA_REGION_START_INDEX;
         PutInode(0, pInode);
 
