@@ -63,13 +63,19 @@ void Mount(MountType type)
             pFileDescTable = (FileDescTable *) malloc(sizeof(FileDescTable));
             memset(pFileDescTable,0,sizeof(FileDescTable));
         }
+        if(pFileSysInfo==NULL){
+            pFileSysInfo = (FileSysInfo * )malloc(sizeof(FileSysInfo));
+            DevReadBlock(FILESYS_INFO_BLOCK,pFileSysInfo);
+        }
     }
 }
 
 void Unmount(void)
 {
     DevWriteBlock(0,pFileSysInfo);
+    free(pFileSysInfo);
     pFileSysInfo = NULL;
+    free(pFileDescTable);
     pFileDescTable = NULL;
     close(fd);
 }

@@ -94,6 +94,7 @@ int addFileDir(char* target,int parentInodeNum){
         if(bnum==0){//add new direct pointer and new entry
             newBlockNum = addNewDirEntry(i,parentInode,parentInodeNum);
             parentInode->dirBlockPtr[i] = newBlockNum;
+            parentInode->size+=BLOCK_SIZE;
             bnum = parentInode->dirBlockPtr[i];
             PutInode(parentInodeNum,parentInode);
         }
@@ -137,6 +138,7 @@ int addFileDir(char* target,int parentInodeNum){
             int newBlockNum = GetFreeBlockNum();
             SetBlockBitmap(newBlockNum);
             updateFileSysInfo(ALOCATE_BLOCK);
+            parentInode->size+=BLOCK_SIZE;
             indirectBlock[i]=newBlockNum;
             DirEntry* newDirEntry = (DirEntry *)malloc(BLOCK_SIZE);
             memset(newDirEntry,0,BLOCK_SIZE);
@@ -509,6 +511,7 @@ void disLinkWithParent(Inode* parentInode,int parentInodeNum, int pInodeNum){
                     ResetBlockBitmap(bnum);
                     updateFileSysInfo(FREE_BLOCK);
                     parentInode->dirBlockPtr[i]=0;
+                    parentInode->size-=BLOCK_SIZE;
                     PutInode(parentInodeNum,parentInode);
                 }
 
@@ -528,6 +531,16 @@ void disLinkWithParent(Inode* parentInode,int parentInodeNum, int pInodeNum){
                 de[j].inodeNum=0;
                 strcpy(de[j].name,"");
                 DevWriteBlock(inbnum,de);
+
+                int numOfBlockInDE = getNumOfBlockInDE(de);
+                //de has no child, free block
+                if(numOfBlockInDE==0){
+                    ResetBlockBitmap(inbnum);
+                    updateFileSysInfo(FREE_BLOCK);
+                    indirectBlock[i]=0;
+                    parentInode->size-=BLOCK_SIZE;
+                    DevWriteBlock(bnum,indirectBlock);
+                }
 
                 //dislink indirectBLOCK
                 int numIndirectDE = getNumOfIndirectDE(indirectBlock);
@@ -650,6 +663,7 @@ int addNewDir(char* target, Inode* parentInode,int parentInodeNum){
         if(bnum==0){//add new direct pointer and new entry
             int newBlockNum = addNewDirEntry(i,parentInode,parentInodeNum);
             parentInode->dirBlockPtr[i] = newBlockNum;
+            parentInode->size+=BLOCK_SIZE;
             bnum = parentInode->dirBlockPtr[i];
             PutInode(parentInodeNum,parentInode);
         }
@@ -693,6 +707,7 @@ int addNewDir(char* target, Inode* parentInode,int parentInodeNum){
             int newBlockNum = GetFreeBlockNum();
             SetBlockBitmap(newBlockNum);
             updateFileSysInfo(ALOCATE_BLOCK);
+            parentInode->size+=BLOCK_SIZE;
             indirectBlock[i]=newBlockNum;
             DirEntry* newDirEntry = (DirEntry *)malloc(BLOCK_SIZE);
             memset(newDirEntry,0,BLOCK_SIZE);
@@ -752,9 +767,6 @@ int isExistInDE(char* target, DirEntry* de){
 }
 
 int addNewDirEntry(int index, Inode* parentInode, int parentInodeNum){
-
-    char *fileSysInfoBlock = (char *) malloc(BLOCK_SIZE);
-    FileSysInfo *pFileSysInfo = (FileSysInfo *) fileSysInfoBlock;
 
     int newBlockNum = GetFreeBlockNum();
     updateFileSysInfo(ALOCATE_BLOCK);
@@ -836,6 +848,9 @@ int goDownDir(char* target, Inode* curInode, int* curInodeNum, int* bnum){
 }
 
 void updateFileSysInfo(UPDATE_FLAG flag){
+    if(pFileSysInfo==NULL){
+        loadFileSysInfo();
+    }
     switch(flag){
         case ADD_DIR:
             pFileSysInfo->numAllocBlocks++;
@@ -855,7 +870,9 @@ void updateFileSysInfo(UPDATE_FLAG flag){
             break;
         case FREE_INODE:
             pFileSysInfo->numAllocInodes--;
+            break;
     }
+    DevWriteBlock(FILESYS_INFO_BLOCK,pFileSysInfo);
 }
 int RemoveDir(const char* szDirName)
 {
@@ -1036,6 +1053,13 @@ void FileSysInit(void)
     }
 
 }
+
+
+void loadFileSysInfo(){
+    pFileSysInfo = (FileSysInfo * )malloc(sizeof(FileSysInfo));
+    DevReadBlock(FILESYS_INFO_BLOCK,pFileSysInfo);
+}
+
 void SetInodeBitmap(int inodeno)
 {
     char* InodeBlock = (char *)malloc(BLOCK_SIZE);

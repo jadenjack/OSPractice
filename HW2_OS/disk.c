@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include "disk.h"
 
-int fd; 
+int fd;
 
 void DevCreateDisk(void)
 {
@@ -17,7 +17,7 @@ void DevCreateDisk(void)
 
 void DevOpenDisk(void)
 {
-	fd = open("MY_DISK", O_RDWR);
+    fd = open("MY_DISK", O_RDWR);
 }
 
 void __DevMoveBlock(int blkno){
@@ -26,12 +26,18 @@ void __DevMoveBlock(int blkno){
 
 void DevReadBlock(int blkno, char* pBuf)
 {
-   __DevMoveBlock(blkno);
-   read(fd, pBuf, BLOCK_SIZE);
+    __DevMoveBlock(blkno);
+    read(fd, pBuf, BLOCK_SIZE);
 }
 
 void DevWriteBlock(int blkno, char* pBuf)
 {
-   __DevMoveBlock(blkno);
-   write(fd, pBuf, BLOCK_SIZE);
+    __DevMoveBlock(blkno);
+    write(fd, pBuf, BLOCK_SIZE);
+}
+
+
+void DevCloseDisk(void)
+{
+    close(fd);
 }
