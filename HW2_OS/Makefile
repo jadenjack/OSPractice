@@ -1,10 +1,10 @@
 CC=gcc
-OBJECTS=disk.o fs.o testcase.o
+OBJECTS=disk.o fs.o testcase.o mount.o
 EXTERN_OBJECT=validate.o
-OUT_EXE=hw1
+OUT_EXE=a.out
 
-$(OUT_EXE) : disk.o fs.o testcase.o validate.o
-	$(CC) -o hw1 disk.o fs.o testcase.o validate.o
+$(OUT_EXE) : disk.o fs.o mount.o testcase.o
+	$(CC) -o a.out disk.o fs.o mount.o testcase.o
 
 disk.o : disk.c disk.h
 	$(CC) -c disk.c
@@ -12,7 +12,10 @@ disk.o : disk.c disk.h
 fs.o : fs.c disk.h fs.h
 	$(CC) -c fs.c
 
-testcase.o : testcase.c fs.h validate.h
+mount.o : mount.c fs.h
+	$(CC) -c mount.c
+
+testcase.o : testcase.c fs.h disk.h
 	$(CC) -c testcase.c 
 clean : 
 	rm $(OBJECTS) $(OUT_EXE)

@@ -1,131 +1,354 @@
 #include <stdio.h>
-#include <malloc.h>
-#include <memory.h>
-#include "fs.h"
+#include <stdlib.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <string.h>
+#include <assert.h>
 #include "disk.h"
+#include "fs.h"
 
-//TODO : extern fd, mount reload
-int main() {
 
-    Mount(MT_TYPE_FORMAT);
 
-    int i;garamTest();
+#define FILENAME_MAX_LEN 30
+#define DIR_NUM_MAX      100
 
-    return 0;
+
+void PrintInodeBitmap(void)
+{
+    int i;
+    int count;
+    int* pBitmap = (int*)malloc(BLOCK_SIZE);
+
+    count = BLOCK_SIZE / sizeof(int);
+    DevReadBlock(2, pBitmap);
+    printf("Inode bitmap: ");
+    for (i = 0; i < count; i++)
+        printf("%d", pBitmap[i]);
+    printf("\n");
 }
 
-void mkandremove(){
+void PrintBlockBitmap(void)
+{
     int i;
-    DirEntryInfo* pDirEntryInfo = (DirEntryInfo*)malloc(BLOCK_SIZE * 10);
-    EnumerateDirStatus("/tmp1",pDirEntryInfo, 10);
-    for(i=0;i<10000;i++) {
-//        printf("%d : %d\n",i, MakeDir("/tmp1"));
-//        printf("%d\n", RemoveDir("/tmp1"));
-        MakeDir("/tmp1");
-        RemoveDir("/tmp1");
+    int count;
+    int* pBitmap = (int*)malloc(BLOCK_SIZE);
+
+    count = BLOCK_SIZE / sizeof(int);         /* bit 개수는 64*8 개가 존재 */
+    DevReadBlock(1, pBitmap);
+    printf("Block bitmap");
+    for (i = 0; i < count; i++)
+        printf("%d", pBitmap[i]);
+    printf("\n");
+}
+
+void ReadInode(Inode* pInode, int inodeNo)
+{
+    char* pBuf = NULL;
+    Inode* pMem = NULL;
+    int block = pFileSysInfo->inodeListBlock + inodeNo / NUM_OF_INODE_PER_BLOCK;
+    int inode = inodeNo % NUM_OF_INODE_PER_BLOCK;
+
+    pBuf = (char*)malloc(BLOCK_SIZE);
+
+    DevReadBlock(block, pBuf);
+    pMem = (Inode*)pBuf;
+    memcpy(pInode, &pMem[inode], sizeof(Inode));
+}
+
+void ListDirContentsAndSize(const char* dirName)
+{
+    int i;
+    int count;
+    DirEntryInfo pDirEntry[DIR_NUM_MAX];
+    Inode pInode;
+
+    count = EnumerateDirStatus(dirName, pDirEntry, DIR_NUM_MAX);
+
+    printf("[%s]Sub-directory:\n", dirName);
+    for (i = 0; i < count; i++)
+    {
+        if (pDirEntry[i].type == FILE_TYPE_FILE) {
+            GetInode(pDirEntry[i].inodeNum, &pInode);
+            printf("\t name:%s, inode no:%d, type:file, size:%d, blocks:%d\n", pDirEntry[i].name, pDirEntry[i].inodeNum, pInode.size);
+        }
+        else if (pDirEntry[i].type == FILE_TYPE_DIR)
+            printf("\t name:%s, inode no:%d, type:directory\n", pDirEntry[i].name, pDirEntry[i].inodeNum);
+        else
+        {
+            assert(0);
+        }
     }
 }
+void ListDirContents(const char* dirName)
+{
+    int i;
+    int count;
+    DirEntryInfo pDirEntry[DIR_NUM_MAX];
 
-void writeTest(){
-    //100 bytes string
-    char* str = "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890";
-    MakeDir("/tmp");
-    MakeDir("/tmp/writeTest");
-    int myFd = OpenFile("/tmp/wrtieTest/file1",OPEN_FLAG_CREATE);
-
-    WriteFile(myFd,str,sizeof(str));
-}
-
-void garamTest(){
-    Mount(MT_TYPE_FORMAT);
-    MakeDir("/tmp");
-    MakeDir("/tmp/asd/");
-    MakeDir("/test");
-    MakeDir("/tmp/asd/cde");
-    MakeDir("/tmp/bcd/");
-    printInodeState();
-    printBlockState();
-    MakeDir("/tmp/fff/");
-    MakeDir("/tmp/mon/");
-    MakeDir("/tmp/tue/");
-    MakeDir("/tmp/wed/");
-    printInodeState();
-    printBlockState();
-    MakeDir("/tmp/thur/");
-    MakeDir("/tmp/fri/");
-    MakeDir("/tmp/sat/");
-    MakeDir("/tmp/sun/");
-    MakeDir("/tmp/jan/");
-    MakeDir("/tmp/feb/");
-    MakeDir("/tmp/mar/");
-    MakeDir("/tmp/apr/");
-    MakeDir("/tmp/may/");
-    MakeDir("/tmp/jun/");
-    MakeDir("/tmp/jul/");
-    MakeDir("/tmp/aug/");
-    MakeDir("/tmp/sep/");
-    MakeDir("/tmp/oct/");
-    MakeDir("/tmp/nov/");
-    MakeDir("/tmp/dec/");
-    MakeDir("/tmp/ddddd/");
-}
-
-void printFileSysInfo(){
-    printf("\n↓↓↓↓↓↓↓↓↓FileSysInfo↓↓↓↓↓↓↓↓↓↓↓\n");
-    printf("blocks : %d\n", pFileSysInfo->blocks);
-    printf("rootInodeNum : %d\n", pFileSysInfo->rootInodeNum);
-    printf("diskCapacity : %d\n", pFileSysInfo->diskCapacity);
-    printf("numAllocBlocks : %d\n", pFileSysInfo->numAllocBlocks);
-    printf("numFreeBlocks : %d\n", pFileSysInfo->numFreeBlocks);
-    printf("numAllocInodes : %d\n", pFileSysInfo->numAllocInodes);
-    printf("blockBitmapBlock : %d\n", pFileSysInfo->blockBitmapBlock);
-    printf("inodeBitmapBlock : %d\n", pFileSysInfo->inodeBitmapBlock);
-    printf("inodeListBlock : %d\n", pFileSysInfo->inodeListBlock);
-    printf("dataRegionBlock : %d\n", pFileSysInfo->dataRegionBlock);
-    printf("↑↑↑↑↑↑↑↑↑FileSysInfo↑↑↑↑↑↑↑↑↑↑↑\n");
-
-}
-
-void printInodeState(){
-    int i,j;
-    int inodeNum;
-    Inode* inode = (Inode*)malloc(sizeof(Inode));
-    //for(i=INODELIST_BLOCK_FIRST;i<INODELIST_BLOCK_FIRST+INODELIST_BLOCKS;i++){
-    for(i=INODELIST_BLOCK_FIRST;i<INODELIST_BLOCK_FIRST+5;i++){
-        for(j=0;j<4;j++){
-            inodeNum = (i-INODELIST_BLOCK_FIRST)*4+j;
-            GetInode(inodeNum,inode);
-            printInode(inode,inodeNum);
+    count = EnumerateDirStatus(dirName, pDirEntry, DIR_NUM_MAX);
+    printf("[%s]Sub-directory:\n", dirName);
+    for (i = 0; i < count; i++)
+    {
+        if (pDirEntry[i].type == FILE_TYPE_FILE)
+            printf("\t name:%s, inode no:%d, type:file\n", pDirEntry[i].name, pDirEntry[i].inodeNum);
+        else if (pDirEntry[i].type == FILE_TYPE_DIR)
+            printf("\t name:%s, inode no:%d, type:directory\n", pDirEntry[i].name, pDirEntry[i].inodeNum);
+        else
+        {
+            assert(0);
         }
     }
 }
 
-void printInode(Inode* inode,int inodeNum){
-    printf("\n === Inode %d ===\n",inodeNum);
-    printf("size   : %d\n",inode->size);
-    printf("type   : %d\n",inode->type);
-    printf("dir[0] : %d\n",inode->dirBlockPtr[0]);
-    printf("dir[1] : %d\n",inode->dirBlockPtr[1]);
-    printf("indirct: %d\n",inode->indirBlockPtr);
-    printf("===================\n");
-}
 
-void printBlockState(){
-    int i,j;
-    int inodeNum;
-    Inode* inode = (Inode*)malloc(sizeof(Inode));
-    for(i=19;i<24;i++){
-        printBlock(i);
-    }
-}
-
-void printBlock(int bnum){
-    DirEntry de[4];
+void TestCase1(void)
+{
     int i;
-    DevReadBlock(bnum, de);
-    printf("\n === Block %d ===\n",bnum);
-    for(i=0;i<4;i++){
-        printf("%12s | %d\n",de[i].name,de[i].inodeNum);
+    char dirName[MAX_NAME_LEN];
+
+    printf(" ---- Test Case 1 ----\n");
+
+    MakeDir("/tmp");
+    MakeDir("/usr");
+    MakeDir("/etc");
+    MakeDir("/home");
+    /* make home directory */
+    for (i = 0; i < 7; i++)
+    {
+        memset(dirName, 0, MAX_NAME_LEN);
+        sprintf(dirName, "/home/user%d", i);
+        MakeDir(dirName);
     }
-    printf("===================\n");
+    /* make etc directory */
+    for (i = 0; i < 24; i++)
+    {
+        memset(dirName, 0, MAX_NAME_LEN);
+        sprintf(dirName, "/etc/dev%d", i);
+        MakeDir(dirName);
+    }
+    ListDirContents("/home");
+    ListDirContents("/etc");
+
+    /* remove subdirectory of etc directory */
+    for (i = 23; i >= 0; i--)
+    {
+        memset(dirName, 0, MAX_NAME_LEN);
+        sprintf(dirName, "/etc/dev%d", i);
+        RemoveDir(dirName);
+    }
+
+    ListDirContents("/etc");
+
+    /* remove subdirectory of root directory except /home */
+    RemoveDir("/etc");
+    RemoveDir("/usr");
+    RemoveDir("/tmp");
+}
+
+
+void TestCase2(void)
+{
+    int i, j;
+    int fd;
+    char fileName[FILENAME_MAX_LEN];
+    char dirName[MAX_NAME_LEN];
+    char pBuffer1[BLOCK_SIZE];
+
+    printf(" ---- Test Case 2 ----\n");
+
+    ListDirContents("/home");
+    /* make home directory */
+    for (i = 0; i < 7; i++)
+    {
+
+        for (j = 0; j < 7; j++)
+        {
+
+            memset(fileName, 0, FILENAME_MAX_LEN);
+            sprintf(fileName, "/home/user%d/file%d", i, j);
+            fd = OpenFile(fileName, OPEN_FLAG_CREATE);
+            memset(pBuffer1, 0, BLOCK_SIZE);
+            strcpy(pBuffer1, fileName);
+            WriteFile(fd, pBuffer1, BLOCK_SIZE);
+
+            CloseFile(fd);
+        }
+    }
+
+    for (i = 0; i < 7; i++)
+    {
+        memset(dirName, 0, MAX_NAME_LEN);
+        sprintf(dirName, "/home/user%d", i);
+        ListDirContents(dirName);
+    }
+}
+
+void TestCase3(void) {
+    int i, j, k;
+    char alphabet[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$^&*()_";
+    char fileName[FILENAME_MAX_LEN];
+    char* pBuffer1 = (char*)malloc(BLOCK_SIZE);
+    char* pBuffer2 = (char*)malloc(BLOCK_SIZE);
+    int cIndex = 0;
+    int cmpCount = 0;
+    int fd[4] = { 0, };
+
+    MakeDir("/home/test");
+    for (i = 0; i < 4; i++)
+    {
+        memset(fileName, 0, FILENAME_MAX_LEN);
+        sprintf(fileName, "/home/test/file%d", i);
+        fd[i] = OpenFile(fileName, OPEN_FLAG_CREATE);
+    }
+
+    for (i = 0; i < 18; i++)
+    {
+        for (j = 0; j < 4; j++)
+        {
+            char* str = (char*)malloc(BLOCK_SIZE);
+            memset(str, 0, BLOCK_SIZE);
+            for (k = 0; k < BLOCK_SIZE; k++)
+                str[k] = alphabet[cIndex];
+            WriteFile(fd[j], str, BLOCK_SIZE);
+            cIndex++;
+            free(str);
+        }
+    }
+
+    for (i = 0; i < 4; i++)
+        CloseFile(fd[i]);
+
+
+    for (i = 0; i < 4; i++)
+    {
+        memset(fileName, 0, FILENAME_MAX_LEN);
+        sprintf(fileName, "/home/test/file%d", i);
+        fd[i] = OpenFile(fileName, OPEN_FLAG_READWRITE);
+    }
+
+    cIndex = 0;
+
+    for (i = 0; i < 18; i++)
+    {
+        for (j = 0; j < 4; j++)
+        {
+            memset(pBuffer1, 0, BLOCK_SIZE);
+
+            for (k = 0; k < BLOCK_SIZE; k++)
+                pBuffer1[k] = alphabet[cIndex];
+
+            memset(pBuffer2, 0, BLOCK_SIZE);
+            ReadFile(fd[j], pBuffer2, BLOCK_SIZE);
+            if (strcmp(pBuffer1, pBuffer2) == 0){
+                cmpCount++;
+            }
+            else
+            {
+                printf("TestCase 3 : error!!\n");
+                exit(0);
+            }
+            cIndex++;
+        }
+    }
+    if (cmpCount == 72)
+        printf("TestCase3 : Complete!!!\n");
+}
+
+void TestCase4(void)
+{
+    int i;
+    int fd;
+    char fileName[FILENAME_MAX_LEN];
+    char pBuffer[1024];
+
+
+
+    printf(" ---- Test Case 4 ----\n");
+    for (i = 0; i < 7; i++)
+    {
+        if (i % 2 == 0)
+        {
+            memset(fileName, 0, FILENAME_MAX_LEN);
+            sprintf(fileName, "/home/user6/file%d", i);
+            RemoveFile(fileName);
+            printf("even remove i : %d  / ", i);
+            ListDirContents("/home/user6");
+        }
+    }
+    printf(" ---- Test Case 4: files of even number removed ----\n");
+
+    for (i = 0; i < 7; i++)
+    {
+        if (i % 2)
+        {
+            memset(fileName, 0, FILENAME_MAX_LEN);
+            sprintf(fileName, "/home/user6/file%d", i);
+            fd = OpenFile(fileName, OPEN_FLAG_READWRITE);
+            printf("open file i  : %d  / ",i);
+            ListDirContents("/home/user6");
+            memset(pBuffer, 0, 1024);
+            strcpy(pBuffer, fileName);
+            WriteFile(fd, pBuffer, 513);
+            CloseFile(fd);
+            printf("write file i  : %d  / ", i);
+            ListDirContents("/home/user6");
+        }
+    }
+    printf(" ---- Test Case 4: files of odd number overwritten ----\n");
+
+    ListDirContents("/home/user6");
+
+    for (i = 0; i < 7; i++)
+    {
+        if (i % 2 == 0)
+        {
+            memset(fileName, 0, FILENAME_MAX_LEN);
+            sprintf(fileName, "/home/user6/file%d", i);
+            fd = OpenFile(fileName, OPEN_FLAG_CREATE);
+
+            memset(pBuffer, 0, 1024);
+            strcpy(pBuffer, fileName);
+            WriteFile(fd, pBuffer, 513);
+            WriteFile(fd, pBuffer, 513);
+            CloseFile(fd);
+        }
+    }
+    printf(" ---- Test Case 4: files of even number re-created & written ----\n");
+
+    ListDirContents("/home/user6");
+}
+int main(int argc, char** argv)
+{
+    int TcNum = 4;
+//    Mount(MT_TYPE_FORMAT);
+    Mount(MT_TYPE_READWRITE);
+
+    switch (TcNum)
+    {
+        case 1:
+            TestCase1();
+            PrintInodeBitmap(); PrintBlockBitmap();
+            break;
+        case 2:
+            TestCase2();
+            PrintInodeBitmap(); PrintBlockBitmap();
+            break;
+        case 3:
+            TestCase3();
+            PrintInodeBitmap(); PrintBlockBitmap();
+            break;
+        case 4:
+            TestCase4();
+            PrintInodeBitmap(); PrintBlockBitmap();
+            break;
+
+        default:
+            Unmount();
+//            goto ERROR;
+    }
+    Unmount();
+
+
+    return 0;
 }

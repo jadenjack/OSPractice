@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <memory.h>
 #include "fs.h"
-#include "disk.h"
 #include <unistd.h>
 
 
@@ -19,15 +18,13 @@ void Mount(MountType type)
         //ppt 10p
         int freeBlockNum = GetFreeBlockNum();//Data region start at block num 19, 0~18 blocks are system info
         int freeInodeNum = GetFreeInodeNum();//it must be 0
-        char *dirEntryBlock = (char *) malloc(sizeof(BLOCK_SIZE));
-        memset(dirEntryBlock,0,sizeof(BLOCK_SIZE));
-        DirEntry *de = (DirEntry *) dirEntryBlock;//casting
+        DirEntry de[NUM_OF_DIRENT_PER_BLOCK];
         de[0].inodeNum = freeInodeNum;//first inodeNum of root dir must be 0
         strcpy(de[0].name, ".");//there is only "." file
 
         DevWriteBlock(freeBlockNum, de);
 
-        pFileSysInfo = (FileSysInfo * )malloc(sizeof(FileSysInfo));
+        pFileSysInfo = (FileSysInfo * )malloc(BLOCK_SIZE);
 
         //start init pFileSysInfo
         pFileSysInfo->blocks = 64 * 8;//num of block bit map * bits a byte
@@ -57,6 +54,8 @@ void Mount(MountType type)
         pInode->dirBlockPtr[0] = DATA_REGION_START_INDEX;
         PutInode(0, pInode);
 
+        free(pInode);
+
     }else if(type == MT_TYPE_READWRITE){
         DevOpenDisk();
         if(pFileDescTable==NULL) {//FDT init
@@ -64,8 +63,11 @@ void Mount(MountType type)
             memset(pFileDescTable,0,sizeof(FileDescTable));
         }
         if(pFileSysInfo==NULL){
-            pFileSysInfo = (FileSysInfo * )malloc(sizeof(FileSysInfo));
-            DevReadBlock(FILESYS_INFO_BLOCK,pFileSysInfo);
+            char* infoBlock = (char*)malloc(BLOCK_SIZE);
+            DevReadBlock(FILESYS_INFO_BLOCK,infoBlock);
+            pFileSysInfo = (FileSysInfo * )malloc(BLOCK_SIZE);
+            memcpy(pFileSysInfo,infoBlock,BLOCK_SIZE);
+            free(infoBlock);
         }
     }
 }
